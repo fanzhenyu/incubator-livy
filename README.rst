@@ -3,6 +3,8 @@ Welcome to Livy
 
 * TEST
 
+* MORE TEST
+
 .. image:: https://travis-ci.org/cloudera/livy.svg?branch=master
     :target: https://travis-ci.org/cloudera/livy
 
