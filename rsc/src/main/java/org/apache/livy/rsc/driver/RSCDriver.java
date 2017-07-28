@@ -113,6 +113,10 @@ public class RSCDriver extends BaseProtocol {
     this.idleTimeout = new AtomicReference<>();
   }
 
+  // Initialize repl related object, this method will be overridden by child class to achieve
+  // right behavior.
+  protected void initializeRepl() { }
+
   private synchronized void shutdown() {
     if (!running) {
       return;
@@ -271,11 +275,9 @@ public class RSCDriver extends BaseProtocol {
 
   /**
    * Initializes the SparkContext used by this driver. This implementation creates a
-   * context with the provided configuration. Subclasses can override this behavior,
-   * and returning a null context is allowed. In that case, the context exposed by
-   * JobContext will be null.
+   * context with the provided configuration.
    */
-  protected JavaSparkContext initializeContext() throws Exception {
+  private JavaSparkContext initializeContext() throws Exception {
     long t1 = System.nanoTime();
     LOG.info("Starting Spark context...");
     JavaSparkContext sc = new JavaSparkContext(conf);
@@ -331,6 +333,8 @@ public class RSCDriver extends BaseProtocol {
         jcLock.notifyAll();
       }
 
+      initializeRepl();
+
       synchronized (jcLock) {
         for (JobWrapper<?> job : jobQueue) {
           submit(job);
@@ -367,7 +371,7 @@ public class RSCDriver extends BaseProtocol {
     }
   }
 
-  JobContextImpl jobContext() {
+  protected JobContextImpl jobContext() {
     return jc;
   }
 

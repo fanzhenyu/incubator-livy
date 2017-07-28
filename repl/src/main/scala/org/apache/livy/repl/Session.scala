@@ -31,7 +31,7 @@ import org.json4s.jackson.JsonMethods.{compact, render}
 import org.json4s.DefaultFormats
 import org.json4s.JsonDSL._
 
-import org.apache.livy.Logging
+import org.apache.livy.{JobContext, Logging}
 import org.apache.livy.rsc.RSCConf
 import org.apache.livy.rsc.driver.{Statement, StatementState}
 import org.apache.livy.sessions._
@@ -49,7 +49,8 @@ object Session {
 
 class Session(
     livyConf: RSCConf,
-    interpreter: Interpreter,
+    interpreterGroup: InterpreterGroup,
+    jobContext: JobContext,
     stateChangedCallback: SessionState => Unit = { _ => })
   extends Logging {
   import Session._

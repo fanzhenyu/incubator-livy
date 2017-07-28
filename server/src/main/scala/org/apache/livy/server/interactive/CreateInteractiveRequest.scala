@@ -20,7 +20,7 @@ package org.apache.livy.server.interactive
 import org.apache.livy.sessions.{Kind, Spark}
 
 class CreateInteractiveRequest {
-  var kind: Kind = Spark()
+  var kind: Option[Kind] = None
   var proxyUser: Option[String] = None
   var jars: List[String] = List()
   var pyFiles: List[String] = List()
@@ -37,8 +37,8 @@ class CreateInteractiveRequest {
   var heartbeatTimeoutInSecond: Int = 0
 
   override def toString: String = {
-    s"[kind: $kind, " +
-      s"proxyUser: $proxyUser, " +
+    s"[proxyUser: $proxyUser, " +
+      (if (kind.nonEmpty) s"kind: ${kind.get}, " else "") +
       (if (jars.nonEmpty) s"jars: ${jars.mkString(",")}, " else "") +
       (if (pyFiles.nonEmpty) s"pyFiles: ${pyFiles.mkString(",")}, " else "") +
       (if (files.nonEmpty) s"files: ${files.mkString(",")}, " else "") +

@@ -29,16 +29,17 @@ import scala.util.{Failure, Success, Try}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.repl.SparkIMain
 
+import org.apache.livy.JobContext
+
 /**
  * This represents a Spark interpreter. It is not thread safe.
  */
-class SparkInterpreter(conf: SparkConf)
-  extends AbstractSparkInterpreter with SparkContextInitializer {
+class SparkInterpreter(conf: SparkConf) extends AbstractSparkInterpreter {
 
   private var sparkIMain: SparkIMain = _
-  protected var sparkContext: SparkContext = _
+  private var sparkContext: SparkContext = _
 
-  override def start(): SparkContext = {
+  override def start(jobContext: JobContext): Unit = {
     require(sparkIMain == null && sparkContext == null)
 
     val settings = new Settings()
@@ -102,14 +103,14 @@ class SparkInterpreter(conf: SparkConf)
           classLoader = classLoader.getParent
         }
       }
-
-      createSparkContext(conf)
+      postStart(jobContext)
     }
-
-    sparkContext
   }
 
-  protected def bind(name: String, tpe: String, value: Object, modifier: List[String]): Unit = {
+  override protected def bind(name: String,
+      tpe: String,
+      value: Object,
+      modifier: List[String]): Unit = {
     sparkIMain.beQuietDuring {
       sparkIMain.bind(name, tpe, value, modifier)
     }

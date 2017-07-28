@@ -39,17 +39,30 @@ class ReplDriver(conf: SparkConf, livyConf: RSCConf)
 
   private val kind = Kind(livyConf.get(RSCConf.Entry.SESSION_KIND))
 
-  private[repl] var interpreter: Interpreter = _
+  private[repl] val interpGroup = new InterpreterGroup
 
-  override protected def initializeContext(): JavaSparkContext = {
-    interpreter = kind match {
-      case PySpark() => PythonInterpreter(conf, PySpark())
+  override protected def initializeRepl(): Unit = {
+    require(this.jobContext() != null, "JobContextImpl is not initialized")
+
+    kind match {
+      case PySpark() =>
+        interpGroup.register(PythonInterpreter(conf, PySpark(), this.jobContext()))
       case PySpark3() =>
-        PythonInterpreter(conf, PySpark3())
-      case Spark() => new SparkInterpreter(conf)
-      case SparkR() => SparkRInterpreter(conf)
+        interpGroup.register(PythonInterpreter(conf, PySpark3(), this.jobContext()))
+      case Spark() =>
+        interpGroup.register(new SparkInterpreter(conf))
+      case SparkR() =>
+        interpGroup.register(SparkRInterpreter(conf))
+      case Shared() =>
+        Seq(PythonInterpreter(conf, PySpark()),
+          new SparkInterpreter(conf),
+          SparkRInterpreter(conf)).foreach { i => interpGroup.register(i) }
     }
-    session = new Session(livyConf, interpreter, { s => broadcast(new ReplState(s.toString)) })
+
+    session = new Session(livyConf,
+      interpGroup,
+      this.jobContext(),
+      { s => broadcast(new ReplState(s.toString)) })
 
     Option(Await.result(session.start(), Duration.Inf))
       .map(new JavaSparkContext(_))
@@ -100,7 +113,7 @@ class ReplDriver(conf: SparkConf, livyConf: RSCConf)
   }
 
   override protected def createWrapper(msg: BaseProtocol.BypassJobRequest): BypassJobWrapper = {
-    kind match {
+    Kind(msg.jobTpe) match {
       case PySpark() | PySpark3() => new BypassJobWrapper(this, msg.id,
         new BypassPySparkJob(msg.serializedJob, this))
       case _ => super.createWrapper(msg)
@@ -108,19 +121,19 @@ class ReplDriver(conf: SparkConf, livyConf: RSCConf)
   }
 
   override protected def addFile(path: String): Unit = {
-    require(interpreter != null)
-    interpreter match {
-      case pi: PythonInterpreter => pi.addFile(path)
-      case _ => super.addFile(path)
+    require(!interpGroup.isEmpty())
+    interpGroup.allInterpreters().filter(_._2.isInstanceOf[PythonInterpreter]).foreach { i =>
+      i.asInstanceOf[PythonInterpreter].addFile(path)
     }
+    super.addFile(path)
   }
 
   override protected def addJarOrPyFile(path: String): Unit = {
-    require(interpreter != null)
-    interpreter match {
-      case pi: PythonInterpreter => pi.addPyFile(this, conf, path)
-      case _ => super.addJarOrPyFile(path)
+    require(!interpGroup.isEmpty())
+    interpGroup.allInterpreters().filter(_._2.isInstanceOf[PythonInterpreter]).foreach { i =>
+      i.asInstanceOf[PythonInterpreter].addPyFile(this, conf, path)
     }
+    super.addJarOrPyFile(path)
   }
 
   override protected def onClientAuthenticated(client: Rpc): Unit = {

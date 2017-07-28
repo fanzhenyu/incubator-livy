@@ -35,7 +35,7 @@ import org.json4s.jackson.Serialization.write
 import py4j._
 import py4j.reflection.PythonProxyHandler
 
-import org.apache.livy.Logging
+import org.apache.livy.{JobContext, Logging}
 import org.apache.livy.client.common.ClientConf
 import org.apache.livy.rsc.BaseProtocol
 import org.apache.livy.rsc.driver.BypassJobWrapper
@@ -44,14 +44,14 @@ import org.apache.livy.sessions._
 // scalastyle:off println
 object PythonInterpreter extends Logging {
 
-  def apply(conf: SparkConf, kind: Kind): Interpreter = {
+  def apply(conf: SparkConf, kind: Kind,  jobContext: JobContext): Interpreter = {
     val pythonExec = kind match {
         case PySpark() => sys.env.getOrElse("PYSPARK_PYTHON", "python")
         case PySpark3() => sys.env.getOrElse("PYSPARK3_PYTHON", "python3")
         case _ => throw new IllegalArgumentException(s"Unknown kind: $kind")
     }
 
-    val gatewayServer = new GatewayServer(null, 0)
+    val gatewayServer = new GatewayServer(jobContext, 0)
     gatewayServer.start()
 
     val builder = new ProcessBuilder(Seq(pythonExec, createFakeShell().toString).asJava)

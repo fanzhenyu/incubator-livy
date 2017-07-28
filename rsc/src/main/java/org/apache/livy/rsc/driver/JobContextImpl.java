@@ -20,8 +20,7 @@ package org.apache.livy.rsc.driver;
 import java.io.File;
 import java.lang.reflect.Method;
 
-import org.apache.spark.SparkContext;
-import org.apache.spark.api.java.JavaFutureAction;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.hive.HiveContext;
@@ -66,9 +65,28 @@ class JobContextImpl implements JobContext {
             Object spark = clz.getField("MODULE$").get(null);
             Method m = clz.getMethod("builder");
             Object builder = m.invoke(spark);
-            builder.getClass().getMethod("sparkContext", SparkContext.class)
-              .invoke(builder, sc.sc());
-            sparksession = builder.getClass().getMethod("getOrCreate").invoke(builder);
+
+            SparkConf conf = sc.getConf();
+            if (conf.get("spark.sql.catalogImplementation", "in-memory").toLowerCase() == "hive") {
+              if ((boolean) clz.getMethod("hiveClassesArePresent").invoke(spark)) {
+                ClassLoader loader = Thread.currentThread().getContextClassLoader() != null ?
+                  Thread.currentThread().getContextClassLoader() : getClass().getClassLoader();
+                if (loader.getResource("hive-site.xml") == null) {
+                  LOG.warn("livy.repl.enable-hive-context is true but no hive-site.xml found on " +
+                   "classpath");
+                }
+
+                builder.getClass().getMethod("enableHiveSupport").invoke(builder);
+                sparksession = builder.getClass().getMethod("getOrCreate").invoke(builder);
+                LOG.info("Created Spark session (with Hive support).");
+              } else {
+                sparksession = builder.getClass().getMethod("getOrCreate").invoke(builder);
+                LOG.info("Created Spark session.");
+              }
+            } else {
+              sparksession = builder.getClass().getMethod("getOrCreate").invoke(builder);
+              LOG.info("Created Spark session.");
+            }
           } catch (Exception e) {
             LOG.warn("SparkSession is not supported", e);
             throw e;
@@ -97,7 +115,16 @@ class JobContextImpl implements JobContext {
     if (hivectx == null) {
       synchronized (this) {
         if (hivectx == null) {
-          hivectx = new HiveContext(sc.sc());
+          SparkConf conf = sc.getConf();
+          if (conf.getBoolean("spark.repl.enableHiveContext", false)) {
+            ClassLoader loader = Thread.currentThread().getContextClassLoader() != null ?
+              Thread.currentThread().getContextClassLoader() : getClass().getClassLoader();
+            if (loader.getResource("hive-site.xml") == null) {
+              LOG.warn("livy.repl.enable-hive-context is true but no hive-site.xml found on " +
+               "classpath.");
+            }
+            hivectx = new HiveContext(sc.sc());
+          }
         }
       }
     }

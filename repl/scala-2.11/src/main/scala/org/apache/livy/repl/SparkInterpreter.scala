@@ -21,6 +21,7 @@ import java.io.File
 import java.net.URLClassLoader
 import java.nio.file.{Files, Paths}
 
+
 import scala.tools.nsc.Settings
 import scala.tools.nsc.interpreter.JPrintWriter
 import scala.tools.nsc.interpreter.Results.Result
@@ -29,17 +30,18 @@ import scala.util.control.NonFatal
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.repl.SparkILoop
 
+import org.apache.livy.JobContext
+
 /**
  * Scala 2.11 version of SparkInterpreter
  */
-class SparkInterpreter(conf: SparkConf)
-  extends AbstractSparkInterpreter with SparkContextInitializer {
+class SparkInterpreter(conf: SparkConf) extends AbstractSparkInterpreter {
 
   protected var sparkContext: SparkContext = _
   private var sparkILoop: SparkILoop = _
   private var sparkHttpServer: Object = _
 
-  override def start(): SparkContext = {
+  override def start(jobContext: JobContext): Unit = {
     require(sparkILoop == null)
 
     val rootDir = conf.get("spark.repl.classdir", System.getProperty("java.io.tmpdir"))
@@ -89,10 +91,8 @@ class SparkInterpreter(conf: SparkConf)
         }
       }
 
-      createSparkContext(conf)
+      postStart(jobContext)
     }
-
-    sparkContext
   }
 
   override def close(): Unit = synchronized {
@@ -127,7 +127,10 @@ class SparkInterpreter(conf: SparkConf)
     Option(sparkILoop.lastRequest.lineRep.call("$result"))
   }
 
-  protected def bind(name: String, tpe: String, value: Object, modifier: List[String]): Unit = {
+  override protected def bind(name: String,
+      tpe: String,
+      value: Object,
+      modifier: List[String]): Unit = {
     sparkILoop.beQuietDuring {
       sparkILoop.bind(name, tpe, value, modifier)
     }
